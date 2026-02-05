@@ -1,0 +1,5 @@
+{
+  "name": "Sentinel-Adversary",
+  "description": "AI-powered Adversarial Quant Trading System (Python/FastAPI) for OKX Perpetual Futures.",
+  "requestFramePermissions": []
+}
