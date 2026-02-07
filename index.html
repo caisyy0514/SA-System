@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -14,7 +15,7 @@
         .btn-primary:hover { background-color: #2ea043; }
         .btn-danger { background-color: #da3633; color: white; }
         .btn-danger:hover { background-color: #f85149; }
-        .log-terminal { background-color: #010409; border: 1px solid #30363d; height: 300px; overflow-y: scroll; font-size: 0.85rem; }
+        .log-terminal { background-color: #010409; border: 1px solid #30363d; height: 400px; overflow-y: scroll; font-size: 0.85rem; }
     </style>
 </head>
 <body class="p-6">
@@ -32,10 +33,10 @@
             <form id="configForm" class="space-y-4 border border-gray-800 p-5 rounded-lg bg-[#161b22]">
                 <h2 class="text-lg font-bold text-blue-400 border-b border-gray-700 pb-2">1. 交易所配置 (OKX)</h2>
                 <div class="grid grid-cols-1 gap-3">
-                    <input type="text" name="OKX_API_KEY" placeholder="OKX API Key (API 键)" class="input-dark w-full p-2 rounded">
-                    <input type="password" name="OKX_SECRET_KEY" placeholder="OKX Secret Key (私钥)" class="input-dark w-full p-2 rounded">
-                    <input type="password" name="OKX_PASSPHRASE" placeholder="OKX Passphrase (通行证密码)" class="input-dark w-full p-2 rounded">
-                    <div class="flex items-center space-x-2">
+                    <input type="text" name="OKX_API_KEY" placeholder="OKX API Key" class="input-dark w-full p-2 rounded">
+                    <input type="password" name="OKX_SECRET_KEY" placeholder="OKX Secret Key" class="input-dark w-full p-2 rounded">
+                    <input type="password" name="OKX_PASSPHRASE" placeholder="OKX Passphrase" class="input-dark w-full p-2 rounded">
+                    <div class="flex items-center space-x-2 text-sm">
                         <input type="checkbox" name="IS_SANDBOX" id="sandbox">
                         <label for="sandbox">使用 OKX 模拟盘 (Sandbox)</label>
                     </div>
@@ -43,13 +44,13 @@
 
                 <h2 class="text-lg font-bold text-purple-400 border-b border-gray-700 pb-2 pt-4">2. AI 大脑配置</h2>
                 <div class="grid grid-cols-1 gap-3">
-                    <input type="password" name="GEMINI_API_KEY" placeholder="Gemini API Key (模型 A - 策略师)" class="input-dark w-full p-2 rounded">
-                    <input type="password" name="DEEPSEEK_API_KEY" placeholder="DeepSeek API Key (模型 B - 审计员)" class="input-dark w-full p-2 rounded">
+                    <input type="password" name="GEMINI_API_KEY" placeholder="Gemini API Key (Strategist)" class="input-dark w-full p-2 rounded">
+                    <input type="password" name="DEEPSEEK_API_KEY" placeholder="DeepSeek API Key (Auditor)" class="input-dark w-full p-2 rounded">
                 </div>
 
                 <h2 class="text-lg font-bold text-green-400 border-b border-gray-700 pb-2 pt-4">3. 策略与风控</h2>
                 <div class="grid grid-cols-2 gap-3">
-                    <div>
+                    <div class="col-span-2">
                         <label class="text-xs text-gray-500">交易对 (JSON数组)</label>
                         <input type="text" name="TRADING_SYMBOLS" value='["BTC/USDT:USDT", "ETH/USDT:USDT"]' class="input-dark w-full p-2 rounded">
                     </div>
@@ -58,11 +59,15 @@
                         <input type="text" name="TIMEFRAME" value="15m" class="input-dark w-full p-2 rounded">
                     </div>
                     <div>
-                        <label class="text-xs text-gray-500">单笔最大风险 ($)</label>
+                        <label class="text-xs text-gray-500">杠杆倍数</label>
+                        <input type="number" name="LEVERAGE" value="5" class="input-dark w-full p-2 rounded">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500">单笔风险 ($)</label>
                         <input type="number" name="MAX_RISK_PER_TRADE_USD" value="50.0" class="input-dark w-full p-2 rounded">
                     </div>
                     <div>
-                        <label class="text-xs text-gray-500">最小期望值 (1.0-5.0)</label>
+                        <label class="text-xs text-gray-500">最小期望值 (EV)</label>
                         <input type="number" name="MIN_EXPECTED_VALUE" value="1.5" step="0.1" class="input-dark w-full p-2 rounded">
                     </div>
                 </div>
@@ -78,47 +83,36 @@
         <div class="space-y-4">
             <h2 class="text-xl font-bold">实时终端 (Live Terminal)</h2>
             <div id="logContainer" class="log-terminal p-4 rounded text-green-500 font-mono text-xs">
-                <div>等待指令...</div>
+                <div>等待系统就绪...</div>
             </div>
-            <div class="text-xs text-gray-500">
-                * 日志每 2 秒自动刷新。<br>
-                * 为了安全，配置不会保存到硬盘。Zeabur 重启/休眠后需重新输入 API Key。
+            <div class="text-xs text-gray-500 leading-relaxed">
+                <p>• API 路径已切换为相对路径，支持各类云端代理环境。</p>
+                <p>• 终端日志每 2 秒同步一次后端缓冲区。</p>
+                <p>• 停止系统会撤销未成交的挂单并关闭 WebSocket 连接。</p>
             </div>
         </div>
     </div>
 
     <script>
-        // Auto-detect API Base URL
-        // If file://, assume localhost:8000
-        // If http(s)://, use current origin
-        const API_BASE = window.location.protocol === 'file:' 
-            ? 'http://127.0.0.1:8000' 
-            : window.location.origin;
-
-        console.log("API Endpoint:", API_BASE);
+        // Use relative paths to be environment agnostic
+        const API = {
+            status: 'api/status',
+            start: 'api/start',
+            stop: 'api/stop'
+        };
 
         async function updateStatus() {
             const errorBadge = document.getElementById('connectionError');
             try {
-                const res = await fetch(`${API_BASE}/status`);
+                const res = await fetch(API.status);
                 
                 if (!res.ok) {
-                    throw new Error(`HTTP Error ${res.status}`);
+                    throw new Error(`HTTP ${res.status}`);
                 }
 
-                const text = await res.text();
-                let data;
-                try {
-                    data = JSON.parse(text);
-                } catch (e) {
-                    // This handles cases where server returns HTML 404/500 pages
-                    throw new Error("Invalid JSON Response");
-                }
-                
-                // Success - Hide Error
+                const data = await res.json();
                 errorBadge.classList.add('hidden');
 
-                // Update Badge
                 const badge = document.getElementById('statusBadge');
                 if (data.running) {
                     badge.innerText = "运行中";
@@ -128,21 +122,21 @@
                     badge.className = "px-3 py-1 text-xs font-bold rounded-full bg-red-900 text-red-200";
                 }
 
-                // Update Logs
                 const logDiv = document.getElementById('logContainer');
-                // Only scroll if near bottom to allow user to scroll up
-                const isNearBottom = logDiv.scrollHeight - logDiv.scrollTop - logDiv.clientHeight < 100;
+                const isNearBottom = logDiv.scrollHeight - logDiv.scrollTop - logDiv.clientHeight < 50;
                 
-                logDiv.innerHTML = data.logs.map(line => `<div>${line}</div>`).join('');
+                if (data.logs && data.logs.length > 0) {
+                    logDiv.innerHTML = data.logs.map(line => `<div>${line}</div>`).join('');
+                }
                 
                 if (isNearBottom) {
                     logDiv.scrollTop = logDiv.scrollHeight;
                 }
 
             } catch (e) {
-                console.error("Status fetch fail:", e.message);
+                console.error("Fetch fail:", e);
                 errorBadge.classList.remove('hidden');
-                errorBadge.innerText = `连接失败: ${e.message}`;
+                errorBadge.innerText = `连接异常: ${e.message}`;
             }
         }
 
@@ -154,32 +148,26 @@
             for (let [key, value] of formData.entries()) {
                 if (key === 'IS_SANDBOX') config[key] = true;
                 else if (key === 'TRADING_SYMBOLS') {
-                    try { config[key] = JSON.parse(value); } catch(e) { alert("交易对格式错误 (必须是 JSON 数组)"); return; }
+                    try { config[key] = JSON.parse(value); } catch(e) { alert("交易对格式错误"); return; }
                 }
                 else if (['LEVERAGE', 'UPDATE_INTERVAL_SECONDS'].includes(key)) config[key] = parseInt(value);
                 else if (['MAX_RISK_PER_TRADE_USD', 'MIN_EXPECTED_VALUE'].includes(key)) config[key] = parseFloat(value);
                 else config[key] = value;
             }
-            if (!formData.get('IS_SANDBOX')) config['IS_SANDBOX'] = false;
+            if (!config['IS_SANDBOX']) config['IS_SANDBOX'] = false;
 
             try {
-                const res = await fetch(`${API_BASE}/start`, {
+                const res = await fetch(API.start, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(config)
                 });
                 
-                const text = await res.text();
-                try {
-                    const data = JSON.parse(text);
-                    if (res.ok) {
-                        alert("系统已启动！");
-                        updateStatus();
-                    } else {
-                        alert("错误: " + (data.detail || text));
-                    }
-                } catch (e) {
-                    alert("服务器错误 (Non-JSON): " + text.substring(0, 100));
+                const data = await res.json();
+                if (res.ok) {
+                    alert("指令已下达：系统启动中");
+                } else {
+                    alert("启动失败: " + (data.detail || "未知错误"));
                 }
             } catch (e) {
                 alert("请求失败: " + e.message);
@@ -189,18 +177,17 @@
         async function stopBot() {
             if (!confirm("确定要停止交易系统吗？")) return;
             try {
-                const res = await fetch(`${API_BASE}/stop`, { method: 'POST' });
-                const text = await res.text();
-                if (!res.ok) throw new Error(text);
-                
-                alert("系统已停止");
-                updateStatus();
+                const res = await fetch(API.stop, { method: 'POST' });
+                if (res.ok) {
+                    alert("系统已安全停止");
+                } else {
+                    alert("停止指令未能成功送达");
+                }
             } catch (e) {
-                alert("停止失败: " + e.message);
+                alert("网络错误: " + e.message);
             }
         }
 
-        // Poll every 2 seconds
         setInterval(updateStatus, 2000);
         updateStatus();
     </script>

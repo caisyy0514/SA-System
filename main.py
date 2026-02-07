@@ -1,3 +1,4 @@
+
 import asyncio
 import logging
 import httpx
@@ -99,7 +100,7 @@ async def strategy_loop():
 
 app = FastAPI(title="Sentinel-Adversary")
 
-# Add CORS to allow requests from local file system or other ports
+# Add CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -117,22 +118,20 @@ async def read_root():
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Error: index.html not found</h1>", status_code=404)
 
-@app.get("/status")
+@app.get("/api/status")
 async def get_status():
     return {
         "running": state.running,
         "logs": list(log_buffer)
     }
 
-@app.post("/start")
+@app.post("/api/start")
 async def start_bot(config: BotConfig):
     if state.running:
         return {"message": "Already running"}
     
-    # 1. Save Config
     state.config = config
     
-    # 2. Init Components
     try:
         logger.info("Initializing Data Engine...")
         state.engine = DataEngine(config)
@@ -145,13 +144,12 @@ async def start_bot(config: BotConfig):
         logger.error(f"Initialization Failed: {e}")
         raise HTTPException(status_code=400, detail=f"Init Failed: {str(e)}")
 
-    # 3. Start Loop
     state.running = True
     state.task = asyncio.create_task(strategy_loop())
     
     return {"message": "Sentinel System Started", "config_summary": config.TRADING_SYMBOLS}
 
-@app.post("/stop")
+@app.post("/api/stop")
 async def stop_bot():
     if not state.running:
         return {"message": "Not running"}
