@@ -4,140 +4,278 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sentinel-Adversary 控制台</title>
+    <title>Sentinel-Adversary | 全透明量化仪表盘</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'JetBrains Mono', monospace; background-color: #0d1117; color: #c9d1d9; }
-        .input-dark { background-color: #161b22; border: 1px solid #30363d; color: #c9d1d9; }
-        .input-dark:focus { border-color: #58a6ff; outline: none; }
-        .btn-primary { background-color: #238636; color: white; }
-        .btn-primary:hover { background-color: #2ea043; }
-        .btn-danger { background-color: #da3633; color: white; }
-        .btn-danger:hover { background-color: #f85149; }
-        .log-terminal { background-color: #010409; border: 1px solid #30363d; height: 400px; overflow-y: scroll; font-size: 0.85rem; }
+        :root {
+            --bg-dark: #0d1117;
+            --card-bg: #161b22;
+            --border: #30363d;
+            --text-main: #c9d1d9;
+            --text-dim: #8b949e;
+            --accent-green: #238636;
+            --accent-red: #da3633;
+            --accent-blue: #58a6ff;
+            --accent-purple: #bc8cff;
+        }
+        body { font-family: 'JetBrains Mono', monospace; background-color: var(--bg-dark); color: var(--text-main); }
+        .input-dark { background-color: #0d1117; border: 1px solid var(--border); color: var(--text-main); font-size: 0.8rem; }
+        .input-dark:focus { border-color: var(--accent-blue); outline: none; }
+        .btn-action { transition: all 0.2s; }
+        .btn-action:hover { filter: brightness(1.2); }
+        .card { background-color: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; }
+        .signal-card { border-left: 4px solid #30363d; }
+        .signal-card.LONG { border-left-color: var(--accent-green); }
+        .signal-card.SHORT { border-left-color: var(--accent-red); }
+        .signal-card.WAIT { border-left-color: #484f58; }
+        
+        .log-terminal { background-color: #010409; font-size: 0.75rem; height: 100%; overflow-y: auto; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+        
+        @keyframes pulse-blue { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .analyzing { animation: pulse-blue 1.5s infinite; color: var(--accent-blue); }
+        .badge { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     </style>
 </head>
-<body class="p-6">
+<body class="h-screen flex flex-col overflow-hidden">
 
-    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- 顶部导航栏 -->
+    <header class="h-14 border-b border-[#30363d] flex items-center justify-between px-6 bg-[#161b22] shrink-0">
+        <div class="flex items-center space-x-4">
+            <span class="text-xl font-bold tracking-tighter text-white">哨兵-对抗者 (SENTINEL)</span>
+            <div id="statusIndicator" class="flex items-center space-x-2">
+                <span class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]"></span>
+                <span class="text-xs font-bold text-gray-400">系统离线</span>
+            </div>
+        </div>
+        <div class="flex items-center space-x-6 text-xs font-medium">
+            <div id="analyzingBox" class="hidden flex items-center space-x-2">
+                <span class="analyzing font-bold">● 正在扫描分析</span>
+                <span id="targetSymbol" class="text-blue-400">BTC/USDT</span>
+            </div>
+            <div class="text-gray-500">运行时长: <span id="uptimeDisplay" class="text-gray-300">00:00:00</span></div>
+            <div class="flex space-x-2">
+                <button onclick="toggleConfig()" class="text-gray-400 hover:text-white transition">参数配置</button>
+                <button onclick="stopBot()" class="px-3 py-1 bg-red-900/30 text-red-400 border border-red-800 rounded hover:bg-red-800/50 transition">紧急停止</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 flex overflow-hidden">
         
-        <!-- Left Panel: Config -->
-        <div class="space-y-6">
-            <div class="flex items-center space-x-4">
-                <h1 class="text-2xl font-bold text-white">Sentinel-Adversary</h1>
-                <span id="statusBadge" class="px-3 py-1 text-xs font-bold rounded-full bg-red-900 text-red-200">已停止</span>
-                <span id="connectionError" class="hidden text-xs text-red-500 font-bold animate-pulse">连接失败</span>
-            </div>
-
-            <form id="configForm" class="space-y-4 border border-gray-800 p-5 rounded-lg bg-[#161b22]">
-                <h2 class="text-lg font-bold text-blue-400 border-b border-gray-700 pb-2">1. 交易所配置 (OKX)</h2>
-                <div class="grid grid-cols-1 gap-3">
-                    <input type="text" name="OKX_API_KEY" placeholder="OKX API Key" class="input-dark w-full p-2 rounded">
-                    <input type="password" name="OKX_SECRET_KEY" placeholder="OKX Secret Key" class="input-dark w-full p-2 rounded">
-                    <input type="password" name="OKX_PASSPHRASE" placeholder="OKX Passphrase" class="input-dark w-full p-2 rounded">
-                    <div class="flex items-center space-x-2 text-sm">
-                        <input type="checkbox" name="IS_SANDBOX" id="sandbox">
-                        <label for="sandbox">使用 OKX 模拟盘 (Sandbox)</label>
+        <!-- 侧边栏: 配置 -->
+        <aside id="configSidebar" class="w-80 border-r border-[#30363d] bg-[#0d1117] p-4 flex flex-col space-y-4 overflow-y-auto custom-scrollbar shrink-0">
+            <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-2">交易引擎核心配置</h2>
+            <form id="configForm" class="space-y-4">
+                <div class="space-y-1">
+                    <label class="text-[10px] text-gray-500 uppercase">OKX 交易所密钥</label>
+                    <input type="text" name="OKX_API_KEY" placeholder="API Key" class="input-dark w-full p-2 rounded">
+                    <input type="password" name="OKX_SECRET_KEY" placeholder="Secret Key" class="input-dark w-full p-2 rounded">
+                    <input type="password" name="OKX_PASSPHRASE" placeholder="Passphrase" class="input-dark w-full p-2 rounded">
+                    <div class="flex items-center space-x-2 mt-1">
+                        <input type="checkbox" name="IS_SANDBOX" id="sandbox" class="rounded border-gray-700 bg-black">
+                        <label for="sandbox" class="text-[10px] text-gray-400">开启模拟盘交易 (SANDBOX)</label>
                     </div>
                 </div>
 
-                <h2 class="text-lg font-bold text-purple-400 border-b border-gray-700 pb-2 pt-4">2. AI 大脑配置</h2>
-                <div class="grid grid-cols-1 gap-3">
-                    <input type="password" name="GEMINI_API_KEY" placeholder="Gemini API Key (Strategist)" class="input-dark w-full p-2 rounded">
-                    <input type="password" name="DEEPSEEK_API_KEY" placeholder="DeepSeek API Key (Auditor)" class="input-dark w-full p-2 rounded">
+                <div class="space-y-1">
+                    <label class="text-[10px] text-gray-500 uppercase">AI 策略模型 API</label>
+                    <input type="password" name="GEMINI_API_KEY" placeholder="Gemini API Key (策略师)" class="input-dark w-full p-2 rounded">
+                    <input type="password" name="DEEPSEEK_API_KEY" placeholder="DeepSeek API Key (审计员)" class="input-dark w-full p-2 rounded">
                 </div>
 
-                <h2 class="text-lg font-bold text-green-400 border-b border-gray-700 pb-2 pt-4">3. 策略与风控</h2>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="col-span-2">
-                        <label class="text-xs text-gray-500">交易对 (JSON数组)</label>
-                        <input type="text" name="TRADING_SYMBOLS" value='["BTC/USDT:USDT", "ETH/USDT:USDT"]' class="input-dark w-full p-2 rounded">
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-500">K线周期</label>
-                        <input type="text" name="TIMEFRAME" value="15m" class="input-dark w-full p-2 rounded">
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-500">杠杆倍数</label>
-                        <input type="number" name="LEVERAGE" value="5" class="input-dark w-full p-2 rounded">
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-500">单笔风险 ($)</label>
-                        <input type="number" name="MAX_RISK_PER_TRADE_USD" value="50.0" class="input-dark w-full p-2 rounded">
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-500">最小期望值 (EV)</label>
-                        <input type="number" name="MIN_EXPECTED_VALUE" value="1.5" step="0.1" class="input-dark w-full p-2 rounded">
+                <div class="space-y-1">
+                    <label class="text-[10px] text-gray-500 uppercase">风控与交易参数</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="space-y-1">
+                            <span class="text-[9px] text-gray-600">交易对 (JSON)</span>
+                            <input type="text" name="TRADING_SYMBOLS" value='["BTC/USDT:USDT", "ETH/USDT:USDT"]' class="input-dark w-full p-2 rounded">
+                        </div>
+                        <div class="space-y-1">
+                            <span class="text-[9px] text-gray-600">K线周期</span>
+                            <input type="text" name="TIMEFRAME" value="15m" class="input-dark w-full p-2 rounded">
+                        </div>
+                        <div class="space-y-1">
+                            <span class="text-[9px] text-gray-600">杠杆倍数</span>
+                            <input type="number" name="LEVERAGE" value="5" class="input-dark w-full p-2 rounded">
+                        </div>
+                        <div class="space-y-1">
+                            <span class="text-[9px] text-gray-600">最小 EV</span>
+                            <input type="number" name="MIN_EXPECTED_VALUE" value="1.5" step="0.1" class="input-dark w-full p-2 rounded">
+                        </div>
                     </div>
                 </div>
 
-                <div class="pt-4 flex space-x-4">
-                    <button type="button" onclick="startBot()" class="btn-primary flex-1 py-3 rounded font-bold transition">启动系统</button>
-                    <button type="button" onclick="stopBot()" class="btn-danger flex-1 py-3 rounded font-bold transition">停止系统</button>
-                </div>
+                <button type="button" onclick="startBot()" class="w-full bg-[#238636] hover:bg-[#2ea043] text-white font-bold py-3 rounded text-sm transition mt-4">部署并启动引擎</button>
             </form>
-        </div>
+        </aside>
 
-        <!-- Right Panel: Logs -->
-        <div class="space-y-4">
-            <h2 class="text-xl font-bold">实时终端 (Live Terminal)</h2>
-            <div id="logContainer" class="log-terminal p-4 rounded text-green-500 font-mono text-xs">
-                <div>等待系统就绪...</div>
+        <!-- 主内容: AI 情报中心 -->
+        <section class="flex-1 flex flex-col bg-[#010409]">
+            <div class="p-4 border-b border-[#30363d] flex justify-between items-center bg-[#0d1117]">
+                <h2 class="text-xs font-bold text-blue-400 uppercase tracking-widest">情报流 (实时决策) <span id="signalCount" class="text-gray-600 ml-2">0</span></h2>
+                <div class="flex space-x-2">
+                     <span class="text-[10px] text-gray-500">双模型对抗决策链路已激活</span>
+                </div>
             </div>
-            <div class="text-xs text-gray-500 leading-relaxed">
-                <p>• API 路径已切换为相对路径，支持各类云端代理环境。</p>
-                <p>• 终端日志每 2 秒同步一次后端缓冲区。</p>
-                <p>• 停止系统会撤销未成交的挂单并关闭 WebSocket 连接。</p>
+            
+            <div id="signalFeed" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                <!-- 信号卡片将在此动态注入 -->
+                <div class="flex flex-col items-center justify-center h-full text-gray-600 space-y-4 opacity-50">
+                    <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    <p class="text-xs uppercase font-medium">等待信号接入中...</p>
+                </div>
             </div>
-        </div>
-    </div>
+        </section>
+
+        <!-- 右侧面板: 系统日志 -->
+        <aside class="w-96 border-l border-[#30363d] bg-[#0d1117] flex flex-col shrink-0">
+             <div class="p-4 border-b border-[#30363d] bg-[#161b22]">
+                <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest">系统控制台日志</h2>
+            </div>
+            <div id="logContainer" class="log-terminal p-4 custom-scrollbar text-gray-400 font-mono">
+                <div class="text-blue-500">[系统] 等待初始化指令...</div>
+            </div>
+        </aside>
+
+    </main>
 
     <script>
-        // Use relative paths to be environment agnostic
         const API = {
             status: 'api/status',
             start: 'api/start',
             stop: 'api/stop'
         };
 
-        async function updateStatus() {
-            const errorBadge = document.getElementById('connectionError');
+        let lastSignalHash = "";
+
+        function toggleConfig() {
+            const sidebar = document.getElementById('configSidebar');
+            sidebar.classList.toggle('hidden');
+        }
+
+        async function updateDashboard() {
             try {
                 const res = await fetch(API.status);
-                
-                if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}`);
-                }
-
+                if (!res.ok) throw new Error("连接已中断");
                 const data = await res.json();
-                errorBadge.classList.add('hidden');
 
-                const badge = document.getElementById('statusBadge');
+                // 1. 更新全局状态
+                const indicator = document.getElementById('statusIndicator');
+                const badge = indicator.querySelector('span:first-child');
+                const label = indicator.querySelector('span:last-child');
+                
                 if (data.running) {
-                    badge.innerText = "运行中";
-                    badge.className = "px-3 py-1 text-xs font-bold rounded-full bg-green-900 text-green-200";
+                    badge.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]";
+                    label.innerText = "正在运行";
+                    label.className = "text-xs font-bold text-green-500";
                 } else {
-                    badge.innerText = "已停止";
-                    badge.className = "px-3 py-1 text-xs font-bold rounded-full bg-red-900 text-red-200";
+                    badge.className = "w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]";
+                    label.innerText = "已停止";
+                    label.className = "text-xs font-bold text-red-500";
                 }
 
+                document.getElementById('uptimeDisplay').innerText = data.uptime || "00:00:00";
+
+                // 2. 扫描动画
+                const analysisBox = document.getElementById('analyzingBox');
+                const targetText = document.getElementById('targetSymbol');
+                if (data.current_symbol) {
+                    analysisBox.classList.remove('hidden');
+                    targetText.innerText = data.current_symbol;
+                } else {
+                    analysisBox.classList.add('hidden');
+                }
+
+                // 3. 渲染日志
                 const logDiv = document.getElementById('logContainer');
-                const isNearBottom = logDiv.scrollHeight - logDiv.scrollTop - logDiv.clientHeight < 50;
-                
-                if (data.logs && data.logs.length > 0) {
-                    logDiv.innerHTML = data.logs.map(line => `<div>${line}</div>`).join('');
-                }
-                
-                if (isNearBottom) {
-                    logDiv.scrollTop = logDiv.scrollHeight;
-                }
+                const isAtBottom = logDiv.scrollHeight - logDiv.scrollTop - logDiv.clientHeight < 100;
+                logDiv.innerHTML = data.logs.map(line => `<div>${line}</div>`).join('');
+                if (isAtBottom) logDiv.scrollTop = logDiv.scrollHeight;
+
+                // 4. 渲染信号卡片
+                renderSignals(data.signals);
 
             } catch (e) {
-                console.error("Fetch fail:", e);
-                errorBadge.classList.remove('hidden');
-                errorBadge.innerText = `连接异常: ${e.message}`;
+                console.error(e);
             }
+        }
+
+        function renderSignals(signals) {
+            const container = document.getElementById('signalFeed');
+            const signalCount = document.getElementById('signalCount');
+            
+            if (!signals || signals.length === 0) {
+                signalCount.innerText = "0";
+                return;
+            }
+
+            const currentHash = JSON.stringify(signals[0]);
+            if (currentHash === lastSignalHash) return; 
+            lastSignalHash = currentHash;
+
+            signalCount.innerText = signals.length;
+            
+            container.innerHTML = signals.map(sig => {
+                const actionZH = sig.action === 'LONG' ? '做多' : sig.action === 'SHORT' ? '做空' : '观望';
+                return `
+                <div class="card signal-card ${sig.action} p-4 shadow-xl transition hover:border-gray-600">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-sm font-bold text-white">${sig.symbol}</span>
+                            <span class="badge ${sig.action === 'LONG' ? 'bg-green-900 text-green-300' : sig.action === 'SHORT' ? 'bg-red-900 text-red-300' : 'bg-gray-800 text-gray-400'}">${actionZH}</span>
+                            <span class="text-[10px] text-gray-500">${sig.timestamp}</span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] text-gray-500">期望值 (EV)</div>
+                            <div class="text-lg font-bold ${sig.should_trade ? 'text-green-400' : 'text-gray-500'}">${sig.expected_value}</div>
+                        </div>
+                    </div>
+
+                    <!-- 决策对抗视图 -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 border-t border-[#30363d] pt-4">
+                        <div class="space-y-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                <span class="text-[10px] font-bold text-blue-400 uppercase">策略师 (Gemini)</span>
+                            </div>
+                            <p class="text-[11px] text-gray-400 leading-relaxed italic border-l border-blue-900/30 pl-2">
+                                "${sig.proposal ? sig.proposal.reasoning : '正在分析市场结构...'}"
+                            </p>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                <span class="text-[10px] font-bold text-purple-400 uppercase">审计员 (DeepSeek)</span>
+                                ${sig.audit && sig.audit.approved ? '<span class="text-[9px] text-green-500 font-bold">[通过审计]</span>' : '<span class="text-[9px] text-red-500 font-bold">[驳回申请]</span>'}
+                            </div>
+                            <p class="text-[11px] text-gray-400 leading-relaxed italic border-l border-purple-900/30 pl-2">
+                                "${sig.audit ? sig.audit.auditor_comment : '等待策略提案...'}"
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 执行详情 -->
+                    ${sig.should_trade ? `
+                        <div class="mt-4 bg-[#0d1117] rounded p-3 flex justify-between items-center border border-green-900/30">
+                            <div class="flex space-x-4 text-[10px]">
+                                <div><span class="text-gray-500">入场价:</span> <span class="text-white">${sig.entry}</span></div>
+                                <div><span class="text-gray-500">止损:</span> <span class="text-red-400">${sig.stop_loss}</span></div>
+                                <div><span class="text-gray-500">止盈:</span> <span class="text-green-400">${sig.take_profit}</span></div>
+                            </div>
+                            <span class="text-[9px] font-bold text-green-500 animate-pulse">引擎已执行</span>
+                        </div>
+                    ` : `
+                        <div class="mt-4 text-[10px] text-gray-600 flex items-center space-x-2">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>未触发理由: ${sig.rationale}</span>
+                        </div>
+                    `}
+                </div>
+            `}).join('');
         }
 
         async function startBot() {
@@ -148,13 +286,14 @@
             for (let [key, value] of formData.entries()) {
                 if (key === 'IS_SANDBOX') config[key] = true;
                 else if (key === 'TRADING_SYMBOLS') {
-                    try { config[key] = JSON.parse(value); } catch(e) { alert("交易对格式错误"); return; }
+                    try { config[key] = JSON.parse(value); } catch(e) { alert("交易对 JSON 格式错误"); return; }
                 }
-                else if (['LEVERAGE', 'UPDATE_INTERVAL_SECONDS'].includes(key)) config[key] = parseInt(value);
+                else if (['LEVERAGE'].includes(key)) config[key] = parseInt(value);
                 else if (['MAX_RISK_PER_TRADE_USD', 'MIN_EXPECTED_VALUE'].includes(key)) config[key] = parseFloat(value);
                 else config[key] = value;
             }
             if (!config['IS_SANDBOX']) config['IS_SANDBOX'] = false;
+            config['UPDATE_INTERVAL_SECONDS'] = 300; 
 
             try {
                 const res = await fetch(API.start, {
@@ -162,34 +301,21 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(config)
                 });
-                
-                const data = await res.json();
-                if (res.ok) {
-                    alert("指令已下达：系统启动中");
-                } else {
-                    alert("启动失败: " + (data.detail || "未知错误"));
-                }
-            } catch (e) {
-                alert("请求失败: " + e.message);
-            }
+                if (res.ok) alert("引擎已成功部署，策略循环启动。");
+                else alert("启动失败: " + (await res.json()).detail);
+            } catch (e) { alert("请求失败: " + e.message); }
         }
 
         async function stopBot() {
-            if (!confirm("确定要停止交易系统吗？")) return;
+            if (!confirm("确定要强行停止交易引擎并撤销所有待处理指令吗？")) return;
             try {
                 const res = await fetch(API.stop, { method: 'POST' });
-                if (res.ok) {
-                    alert("系统已安全停止");
-                } else {
-                    alert("停止指令未能成功送达");
-                }
-            } catch (e) {
-                alert("网络错误: " + e.message);
-            }
+                if (res.ok) alert("引擎已安全停止。");
+            } catch (e) { alert("停止出错: " + e.message); }
         }
 
-        setInterval(updateStatus, 2000);
-        updateStatus();
+        setInterval(updateDashboard, 2000);
+        updateDashboard();
     </script>
 </body>
 </html>
