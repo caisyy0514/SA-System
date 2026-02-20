@@ -1,4 +1,4 @@
-import ccxt.pro as ccxt
+import ccxt.async_support as ccxt
 import pandas as pd
 import pandas_ta as ta
 import asyncio
@@ -11,11 +11,14 @@ logger = logging.getLogger("sentinel.engine")
 class DataEngine:
     def __init__(self, config: BotConfig):
         self.config = config
-        # Ensure keys are strings to avoid TypeError during concatenation in libraries
-        api_key = str(config.OKX_API_KEY or "")
-        secret = str(config.OKX_SECRET_KEY or "")
-        passphrase = str(config.OKX_PASSPHRASE or "")
+        # Ensure keys are stripped strings to avoid TypeError or whitespace issues
+        api_key = str(config.OKX_API_KEY or "").strip()
+        secret = str(config.OKX_SECRET_KEY or "").strip()
+        passphrase = str(config.OKX_PASSPHRASE or "").strip()
         
+        if not api_key or not secret or not passphrase:
+            logger.warning("[交易所] 检测到 OKX 密钥不完整，初始化可能受限")
+
         self.exchange = ccxt.okx({
             'apiKey': api_key,
             'secret': secret,
