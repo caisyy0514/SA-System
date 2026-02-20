@@ -11,10 +11,15 @@ logger = logging.getLogger("sentinel.engine")
 class DataEngine:
     def __init__(self, config: BotConfig):
         self.config = config
+        # Ensure keys are strings to avoid TypeError during concatenation in libraries
+        api_key = str(config.OKX_API_KEY or "")
+        secret = str(config.OKX_SECRET_KEY or "")
+        passphrase = str(config.OKX_PASSPHRASE or "")
+        
         self.exchange = ccxt.okx({
-            'apiKey': config.OKX_API_KEY,
-            'secret': config.OKX_SECRET_KEY,
-            'password': config.OKX_PASSPHRASE,
+            'apiKey': api_key,
+            'secret': secret,
+            'password': passphrase,
             'options': {'defaultType': 'swap'},  # Perpetual Swap
             'enableRateLimit': True,
         })

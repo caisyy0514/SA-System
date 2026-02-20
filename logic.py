@@ -52,14 +52,16 @@ class DebateManager:
         # 模型 A: Gemini (策略师)
         if config.GEMINI_API_KEY:
             try:
-                self.client_a = genai.Client(api_key=config.GEMINI_API_KEY)
+                api_key = str(config.GEMINI_API_KEY)
+                self.client_a = genai.Client(api_key=api_key)
             except Exception as e:
                 logger.error(f"Gemini 初始化错误: {e}")
         
         # 模型 B: DeepSeek (审计员)
         if config.DEEPSEEK_API_KEY:
+            api_key = str(config.DEEPSEEK_API_KEY)
             self.client_b = AsyncOpenAI(
-                api_key=config.DEEPSEEK_API_KEY, 
+                api_key=api_key, 
                 base_url="https://api.deepseek.com/v1"
             )
 
