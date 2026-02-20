@@ -51,12 +51,12 @@ async def telegram_alert(message: str, token: str, chat_id: str):
             logger.error(f"Telegram fail: {e}")
 
 async def strategy_loop():
-    logger.info(">>> STRATEGY LOOP STARTED <<<")
+    logger.info(">>> 策略引擎循环已启动 <<<")
     
     while state.running:
         try:
             if not state.engine or not state.brain:
-                logger.error("Engine or Brain not initialized. Stopping.")
+                logger.error("引擎或大脑未初始化。正在停止。")
                 state.running = False
                 break
 
@@ -64,47 +64,48 @@ async def strategy_loop():
                 if not state.running: break
                 
                 state.current_symbol = symbol
-                logger.info(f"Analyzing {symbol}...")
+                logger.info(f"[系统] 正在分析 {symbol}...")
                 
-                # 1. Fetch
+                # 1. 获取数据
                 data = await state.engine.fetch_market_snapshot(symbol)
                 if not data: 
-                    logger.warning(f"No data for {symbol}")
+                    logger.warning(f"[系统] 无法获取 {symbol} 的数据")
                     continue
 
-                # 2. Debate
+                # 2. AI 对抗决策
                 plan = await state.brain.generate_tactics(data)
                 
-                # Store in history
+                # 存储历史
                 state.signals.appendleft(plan)
                 
-                # 3. Report
-                log_msg = f"{symbol} Result: {plan.action} | EV: {plan.expected_value} | Execute: {plan.should_trade}"
+                # 3. 报告结果
+                log_msg = f"[系统] {symbol} 分析完成: {plan.action} | 期望值: {plan.expected_value} | 是否执行: {plan.should_trade}"
                 logger.info(log_msg)
                 
                 if plan.should_trade:
+                    logger.info(f"[系统] 🚨 正在触发 {symbol} 的执行指令 🚨")
                     await telegram_alert(
-                        f"🚨 SIGNAL {symbol} 🚨\nAction: {plan.action}\nEntry: {plan.entry}\nReason: {plan.rationale}", 
+                        f"🚨 信号触发 {symbol} 🚨\n动作: {plan.action}\n入场: {plan.entry}\n理由: {plan.rationale}", 
                         state.config.TELEGRAM_BOT_TOKEN, state.config.TELEGRAM_CHAT_ID
                     )
                     
-                    # 4. Execute
+                    # 4. 执行交易
                     try:
                         await state.engine.execute_strategy(
                             symbol, plan.action, plan.entry, plan.stop_loss, plan.take_profit
                         )
                     except Exception as e:
-                        logger.error(f"Execution failed for {symbol}: {e}")
+                        logger.error(f"[系统] {symbol} 执行失败: {e}")
             
             state.current_symbol = None
-            # Wait for next cycle
+            # 等待下一周期
             await asyncio.sleep(state.config.UPDATE_INTERVAL_SECONDS)
             
         except asyncio.CancelledError:
-            logger.info("Loop Cancelled.")
+            logger.info("循环已取消。")
             break
         except Exception as e:
-            logger.error(f"Loop Crash: {e}")
+            logger.error(f"循环崩溃: {e}")
             state.current_symbol = None
             await asyncio.sleep(60)
 
@@ -147,26 +148,26 @@ async def start_bot(config: BotConfig):
     state.config = config
     
     try:
-        logger.info("Initializing Data Engine...")
+        logger.info("[系统] 正在初始化数据引擎...")
         state.engine = DataEngine(config)
         await state.engine.initialize()
         
-        logger.info("Initializing Brain...")
+        logger.info("[系统] 正在初始化大脑...")
         state.brain = DebateManager(config)
         
     except Exception as e:
-        logger.error(f"Initialization Failed: {e}")
-        raise HTTPException(status_code=400, detail=f"Init Failed: {str(e)}")
+        logger.error(f"[系统] 初始化失败: {e}")
+        raise HTTPException(status_code=400, detail=f"初始化失败: {str(e)}")
 
     state.running = True
     state.task = asyncio.create_task(strategy_loop())
     
-    return {"message": "Sentinel System Started"}
+    return {"message": "哨兵系统已启动"}
 
 @app.post("/api/stop")
 async def stop_bot():
     if not state.running:
-        return {"message": "Not running"}
+        return {"message": "未在运行"}
     
     state.running = False
     if state.task:
@@ -179,5 +180,5 @@ async def stop_bot():
     if state.engine:
         await state.engine.close()
         
-    logger.info(">>> SYSTEM STOPPED <<<")
-    return {"message": "Sentinel System Stopped"}
+    logger.info(">>> 系统已停止 <<<")
+    return {"message": "哨兵系统已停止"}

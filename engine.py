@@ -24,9 +24,9 @@ class DataEngine:
     async def initialize(self):
         try:
             await self.exchange.load_markets()
-            logger.info("OKX Exchange Connection Initialized")
+            logger.info("[交易所] OKX 连接已初始化")
         except Exception as e:
-            logger.error(f"Failed to connect to OKX: {e}")
+            logger.error(f"[交易所] 连接 OKX 失败: {e}")
             raise e
 
     async def close(self):
@@ -78,7 +78,7 @@ class DataEngine:
                 "orderbook_imbalance": self._calc_ob_imbalance(ob)
             }
         except Exception as e:
-            logger.error(f"Error fetching data for {symbol}: {e}")
+            logger.error(f"[交易所] 获取 {symbol} 数据出错: {e}")
             return None
 
     def _calc_ob_imbalance(self, ob) -> str:
@@ -108,7 +108,7 @@ class DataEngine:
             market = self.exchange.market(symbol)
             min_amount = market['limits']['amount']['min']
             if amount < min_amount:
-                logger.warning(f"Calculated size {amount} below min {min_amount}")
+                logger.warning(f"[交易所] 计算的仓位 {amount} 低于最小限制 {min_amount}")
                 return 0.0
         except Exception:
             pass # Skip check if market info not available
@@ -131,9 +131,9 @@ class DataEngine:
             params = {'stopLossPrice': sl, 'takeProfitPrice': tp}
             order = await self.exchange.create_order(symbol, 'market', side, amount, params=params)
             
-            logger.info(f"ORDER EXECUTED: {side} {amount} {symbol} @ Market. SL: {sl}, TP: {tp}")
+            logger.info(f"[交易所] 订单已执行: {side} {amount} {symbol} @ 市价。止损: {sl}, 止盈: {tp}")
             return order
 
         except Exception as e:
-            logger.error(f"Execution Failed: {e}")
+            logger.error(f"[交易所] 执行失败: {e}")
             raise e

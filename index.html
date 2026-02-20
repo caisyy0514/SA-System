@@ -31,6 +31,12 @@
         .signal-card.WAIT { border-left-color: #484f58; }
         
         .log-terminal { background-color: #010409; font-size: 0.75rem; height: 100%; overflow-y: auto; }
+        .debate-room { background-color: #0d1117; border-bottom: 1px solid var(--border); max-height: 300px; overflow-y: auto; }
+        .bubble { max-width: 85%; padding: 8px 12px; border-radius: 12px; font-size: 0.75rem; line-height: 1.4; margin-bottom: 8px; position: relative; }
+        .bubble-strategist { background-color: #1c2128; border: 1px solid #30363d; color: #58a6ff; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .bubble-auditor { background-color: #1c2128; border: 1px solid #30363d; color: #bc8cff; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .bubble-adjudicator { background-color: #23863622; border: 1px solid #238636; color: #3fb950; align-self: center; text-align: center; border-radius: 8px; width: 90%; }
+        
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
@@ -39,6 +45,7 @@
         .analyzing { animation: pulse-blue 1.5s infinite; color: var(--accent-blue); }
         .badge { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     </style>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
 
@@ -116,10 +123,19 @@
         <!-- 主内容: AI 情报中心 -->
         <section class="flex-1 flex flex-col bg-[#010409]">
             <div class="p-4 border-b border-[#30363d] flex justify-between items-center bg-[#0d1117]">
-                <h2 class="text-xs font-bold text-blue-400 uppercase tracking-widest">情报流 (实时决策) <span id="signalCount" class="text-gray-600 ml-2">0</span></h2>
+                <h2 class="text-xs font-bold text-blue-400 uppercase tracking-widest">AI 实时辩论室 (决策链路)</h2>
                 <div class="flex space-x-2">
                      <span class="text-[10px] text-gray-500">双模型对抗决策链路已激活</span>
                 </div>
+            </div>
+
+            <!-- AI 辩论室 -->
+            <div id="debateRoom" class="debate-room p-4 flex flex-col space-y-2 custom-scrollbar">
+                <div class="text-center text-gray-600 text-[10px] uppercase tracking-widest py-10">等待 AI 引擎启动对话...</div>
+            </div>
+
+            <div class="p-4 border-b border-[#30363d] flex justify-between items-center bg-[#0d1117]">
+                <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest">情报流 (历史决策) <span id="signalCount" class="text-gray-600 ml-2">0</span></h2>
             </div>
             
             <div id="signalFeed" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
@@ -193,7 +209,20 @@
                 // 3. 渲染日志
                 const logDiv = document.getElementById('logContainer');
                 const isAtBottom = logDiv.scrollHeight - logDiv.scrollTop - logDiv.clientHeight < 100;
-                logDiv.innerHTML = data.logs.map(line => `<div>${line}</div>`).join('');
+                
+                logDiv.innerHTML = data.logs.map(line => {
+                    let colorClass = "text-gray-400";
+                    if (line.includes("[策略师]")) colorClass = "text-cyan-400";
+                    else if (line.includes("[审计员]")) colorClass = "text-purple-400";
+                    else if (line.includes("[裁决者]")) colorClass = "text-yellow-400";
+                    else if (line.includes("[系统]")) colorClass = "text-blue-400";
+                    else if (line.includes("[交易所]")) colorClass = "text-green-400";
+                    else if (line.includes("订单已执行")) colorClass = "text-green-400 font-bold";
+                    else if (line.includes("失败") || line.includes("错误")) colorClass = "text-red-400";
+                    
+                    return `<div class="${colorClass}">${line}</div>`;
+                }).join('');
+                
                 if (isAtBottom) logDiv.scrollTop = logDiv.scrollHeight;
 
                 // 4. 渲染信号卡片
@@ -206,6 +235,7 @@
 
         function renderSignals(signals) {
             const container = document.getElementById('signalFeed');
+            const debateRoom = document.getElementById('debateRoom');
             const signalCount = document.getElementById('signalCount');
             
             if (!signals || signals.length === 0) {
@@ -218,6 +248,26 @@
             lastSignalHash = currentHash;
 
             signalCount.innerText = signals.length;
+
+            // 更新辩论室
+            const latest = signals[0];
+            if (latest.dialogue && latest.dialogue.length > 0) {
+                debateRoom.innerHTML = latest.dialogue.map(msg => {
+                    let roleName = "系统";
+                    let bubbleClass = "bubble-adjudicator";
+                    if (msg.role === 'strategist') { roleName = "策略师"; bubbleClass = "bubble-strategist"; }
+                    else if (msg.role === 'auditor') { roleName = "审计员"; bubbleClass = "bubble-auditor"; }
+                    else if (msg.role === 'adjudicator') { roleName = "裁决者"; bubbleClass = "bubble-adjudicator"; }
+                    
+                    return `
+                    <div class="bubble ${bubbleClass} animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <div class="text-[9px] font-bold uppercase mb-1 opacity-70">${roleName}</div>
+                        <div>${msg.content}</div>
+                    </div>
+                    `;
+                }).join('');
+                debateRoom.scrollTop = debateRoom.scrollHeight;
+            }
             
             container.innerHTML = signals.map(sig => {
                 const actionZH = sig.action === 'LONG' ? '做多' : sig.action === 'SHORT' ? '做空' : '观望';
@@ -317,5 +367,6 @@
         setInterval(updateDashboard, 2000);
         updateDashboard();
     </script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>
